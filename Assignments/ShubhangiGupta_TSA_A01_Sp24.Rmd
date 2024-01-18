@@ -1,7 +1,7 @@
 ---
 title: "ENV 790.30 - Time Series Analysis for Energy Data | Spring 2024"
 subtitle: "Assignment 1 - Due date 01/18/24"
-author: "Luana"
+author: "Shubhangi Gupta"
 output: pdf_document
 geometry: margin=2.54cm
 ---
@@ -19,12 +19,12 @@ When you have completed the assignment, **Knit** the text and code into a single
 
 Q1. What are your previous experiences with time series analysis, R, and Git? 
 
-> Answer: None
+> Answer: I did my Bachelor’s in Statistics and learnt a basic level of R as a part of my degree. However, it has been 5 years since I graduated and don't remember much R anymore! I did, however, use Github during our Energy Modeling class last semester, and am simultaneously pursuing power modeling and Environmental Data Analytics this semester. My experience with Time Series Analysis lies in my work at my previous job as a Climate Policy Researcher at an environmental think tank (World Resources Institute India) where I used an energy-economy model to make long-term low-carbon pathways for India. All the model outputs were time series data since the pathways extended from 2020-2050 and my role was to (1) clean the data and make it usable in the form of tables and charts and (2) analyse the trends in the data to make policy recommendations. During this project, I used excel and very basic trend analysis and so, in this class, I hope to learn more robust tools to be able to forecast and analyse such pathways and do such work in a more robust manner on a more sophisticated software than Excel.
 
 
 Q2. (Only if you choose to use git) Provide a link below to your forked course repository in GitHub. Make sure you have pulled all recent changes from the course repository and that you have updated your course README file as instructed on the recorded video "Getting started with Git and Github". 
 
-> Answer: 
+> Answer: https://github.com/shubhangi-gupta-54/TSA_Sp24
 
 
 Q3. For this part we just want to see the path to your R project. No need to do anything. The output will be automatically generated once you knit you file. 
