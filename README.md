@@ -12,17 +12,16 @@ luana.marangon.lima@duke.edu <br>
 Office hours: Tu 13:15 -14:15 (in person Gross Hall 102K or Zoom) or by appt <br>
 Zoom info: https://duke.zoom.us/my/luanalima
 
-
-
 **Teaching Assistant** <br>
 
 Lynn Wu <br>
 y.wu@duke.edu <br>
 Office hours: TBD
 
-
 **Syllabus** <br>
 
 Please check the syllabus and more information at our class website: <br>
 env797.github.io
 
+**Student Name**
+Shubhangi Gupta
