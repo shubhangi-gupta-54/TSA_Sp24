@@ -24,6 +24,7 @@ Second R code chunk is for loading packages. By setting `message = FALSE`, the c
 library(lubridate)
 library(ggplot2)
 library(forecast)
+#install.packages("Kendall")
 library(Kendall)
 library(tseries)
 
@@ -36,7 +37,8 @@ library(tseries)
 library(readxl)
 
 #Importing data set without change the original file using read.xlsx
-energy_data1 <- read_excel(path="./Data/Table_10.1_Renewable_Energy_Production_and_Consumption_by_Source.xlsx",skip = 12, sheet="Monthly Data",col_names=FALSE) 
+energy_data1 <- read_excel("./Data/Table_10.1_Renewable_Energy_Production_and_Consumption_by_Source.XLS",skip = 12, sheet="Monthly Data",col_names=FALSE) 
+
 
 #Now let's extract the column names from row 11
 read_col_names <- read_excel(path="./Data/Table_10.1_Renewable_Energy_Production_and_Consumption_by_Source.xlsx",skip = 10,n_max = 1, sheet="Monthly Data",col_names=FALSE) 

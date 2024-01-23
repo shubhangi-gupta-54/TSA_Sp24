@@ -32,7 +32,7 @@ Formatting of dates in R:
 today <- Sys.Date()
 format(today, format = "%B")
 format(today, format = "%y")
-#format(today, format = "")
+format(today, format = "%d")
 #format(today, format = "")
 
 #as.Date()
@@ -72,7 +72,7 @@ date_obj_past
 
 #Build a function to fix year that is more general than the one discussed in the lesson
 fix.early.dates <- function(d, cutoff) {
-       m <- year(d) %% 100  #operator %% is a modular division i.e. integer-divide year(d) by 100 and returns the remainder 
+       m <- year(d) %% 100  #operator %% is a modular division i.e. integer-divide year(d) by 100 and returns the remainder AmodB=Remainder
        year(d) <- ifelse(m > cutoff, 1900+m, 2000+m)  #this will update year(d), year() is a function that returns the year for a data object
        return(d)
 }
@@ -92,7 +92,7 @@ date_obj_past
 date_obj_past2 <- parse_date_time2(str_past,"ymd",cutoff_2000=21)
 date_obj_past2
 
-#Functions ymd(), mdy(), ydm() do not take argument cutoff_2000
+ws#Functions ymd(), mdy(), ydm() do not take argument cutoff_2000
 ```
 
 In some cases when dates are provided as integers, you may need to provide an origin for your dates. For example, excel date could be given as number of days since an origin date. Origin date can be different. When R looks at dates as integers, its origin is January 1, 1970. Check if that is true on your machine. 
