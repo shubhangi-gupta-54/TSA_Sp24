@@ -60,7 +60,7 @@ nhydro <- ncol(raw_inflow_data)-2
 nobs <- nrow(raw_inflow_data) 
 
 #If your file does not have header like this one you can add column names after creating the data frame
-colnames(raw_inflow_data)=c("Month","Year", "HP1", "HP2","HP3")
+colnames(raw_inflow_data)=c("Month","Year", "HP1", "HP2","HP3") #column headers
 
 #Checking data
 head(raw_inflow_data)
@@ -73,7 +73,8 @@ The data sets we will work with will be indexed by time, remember we are doing T
 
 ```{r}
 #using package lubridate
-my_date <- paste(raw_inflow_data[,1],raw_inflow_data[,2],sep="-")
+my_date <- paste(raw_inflow_data[,1],raw_inflow_data[,2],sep="-") 
+#parse: my_date column is a character. parsing is is converting it into a date object. this code pastes the first and second column.
 #pastes data from row 1 with data from row 2 separated by a hyphen
 my_date <- my(my_date)  #function my from package lubridate 
 #my is month year but can use any combination of d,m,y
@@ -89,11 +90,13 @@ head(inflow_data)
 A plot of observed values over time is the first thing you do to start understanding the data set. The default packages on R offer the function *plot()*. But we can generate improved plots using another package *ggplot2*. Package ggplot2 offers better looking plots, additional functionalities, easy incorporation of the date labels, legends, etc.  
 
 ```{r}
+
 #using package ggplot2
-ggplot(inflow_data,aes(x=my_date,y=HP1)+geom_line(colour="blue"))
+library(ggplot2)
+ggplot(inflow_data, aes(x=my_date))+geom_line(aes(y=HP1), colour="blue")
 
 #adding two time series to the same plot
-
+ggplot(inflow_data, aes(x=my_date)) + geom_line(aes(y=HP1), color="blue")+geom_line(aes(y=HP2), colour="black")
 ```
 
 In this course we will also use *autoplot()* which is a ggplot() for time series object. But then we will need to convert our inflow data frame to a *ts* object first.
@@ -104,7 +107,7 @@ In this course we will also use *autoplot()* which is a ggplot() for time series
 Many of the functions we will use require a time series object. You can transform your data in a time series using the function *ts()*. Only the columns with reservoir inflow data should be transformed, not the ones with month and year. Your ts object is not a data frame, but like I said we will need it as a ts for some function we will explore in future scripts.
 
 ```{r}
-ts_inflow_data <- #####
+ts_inflow_data <- ts(inflow_data[,"HP1"], start=c(1931,1), frequency = 12)
 ts_inflow_data
 
 ```
@@ -115,11 +118,10 @@ Let's see the plots generated with *autoplot()*.
 
 ```{r}
 
-autoplot(ts_inflow_data) +
+autoplot(ts_inflow_data) + 
   xlab("Time") +
   ylab("Inflow") +
   labs(color="Reservoir")
-  
 ```
 
 
@@ -129,16 +131,25 @@ There are multiple ways to get acf and pacf plots in R. The default package "sta
 
 ```{r acf}
 # Option 1: The function acf() and pacf() is from package "stats"
-HP1_acf=
+HP1_acf <- acf(ts_inflow_data)  #information on the self correlation of our TS
+HP1_acf
 
 HP1_pacf=
 
-#Option 2: Computing ACF and PACF with package "forecast"
+#Option 2: Computing ACF and PACF with package "forecast". Preferred!
 
 #The next line will output a plot since we have plot=TRUE and also store the acf values in the object
-HP1_acf=
+HP1_acf= Acf(ts_inflow_data, lag.max = 40) #correlation of current date with 6 months, 12 months, 18 months and 24 months)
 
-HP1_pacf=
+HP1_pacf= Pacf(ts_inflow_data, lag.max = 40)
   
+```
+
+```{r}
+#If you have raw data:
+temp <- c(1,2,3,4,5)
+ts_temp <-ts(temp)
+ts_temp_acf <- acf(ts_temp)
+
 ```
 
