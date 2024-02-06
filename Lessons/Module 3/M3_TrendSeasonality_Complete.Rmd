@@ -1,5 +1,5 @@
 ---
-title: "M3: Class Exercise on Trend and Season"
+title: "M3: Exercise"
 author: "Luana Lima"
 output: pdf_document
 ---
@@ -54,6 +54,7 @@ Here we use the function my() from package lubridate.
 
 ```{r}
 #using package lubridate
+library(lubridate)
 my_date <- paste(raw_inflow_data[,1],raw_inflow_data[,2],sep="-")
 my_date <- my(my_date)  #function my from package lubridate
 head(my_date)
@@ -69,6 +70,7 @@ head(inflow_data)
 Initial time series plot.
 
 ```{r}
+library(ggplot2)
 #using package ggplot2
 for(i in 1:nhydro){
   print(ggplot(inflow_data, aes(x=my_date, y=inflow_data[,(1+i)])) +
@@ -77,10 +79,6 @@ for(i in 1:nhydro){
         )
 }
 
-#1+i is the index of the column data to avoid using the column names everything. i is the column name and we need to do the +1 because the first column is the date and so we want to start from the second which is then the first data column.
-#need to use the print function if you use a for loop in ggplot.
-
-#results: only the up movements - not seasonal! 
 ```
 
 ## Zeros in the end on data 
@@ -93,14 +91,11 @@ tail(inflow_data)
 
 
 ```
-
 Note our last observation is from August 2011 but the data file was filled with zeros. Let's remove the last four rows of our data set.
 
 ```{r}
-#Remove last year by replacing current data frame
-inflow_data <- inflow_data[1:(nobs-12),] #nobs is the number of observations - removes the last 12 rows.
-#If there are 0s in your dataset in place of blanks, tit's going to mess up your mean so need to remove the 0s. And since you need the same number of observations in each year, remove the entire row that has a 0
-
+#Remove last for rows by replacing current data frame
+inflow_data <- inflow_data[1:(nobs-12),]
 
 #update object with number of observations
 nobs <- nobs-12
@@ -115,13 +110,12 @@ Fixed!
 Many of the functions we will use require a time series object. You can transform your data in a time series using the function *ts()*. 
 
 ```{r}
-ts_inflow_data <- ts(inflow_data[,2:(2+nhydro-1)],start=c(1931,1),frequency=12) 
-#nhydro is 15 so this gives 16: selects all columns from 2 to 16 -> gives us the data that we want. can also do nhydro+1
-#start is an optional argument.
+ts_inflow_data <- ts(inflow_data[,2:(2+nhydro-1)],frequency=12) 
 #note that we are only transforming columns with inflow data, not the date columns  #start=my_date[1],end=my_date[nobs],
 head(ts_inflow_data,15)
 ```
 
+Note that ts_inflow_data has information on start, end and frequency. 
 
 ## Plotting ACF and PACF
 
@@ -139,69 +133,130 @@ for(i in 1:nhydro){
 ```
 
 
-## Trend Component - Linear Model
+## Trend Component
 
 Let's identify and remove trend component. You start by fitting a linear model to $Y_t=\beta_0+\beta_1*t+\epsilon_t$. 
 
 ```{r}
 #Create vector t
-t <- 1:nobs
-iHP <- 4
-#to run it for all hydro plants, can make a for loop: for(iHP in 1:nhydro){all the code in one code chunk}
+t <- c(1:nobs)
+
+#Choose one hydro plant to study, as an exercise try to generalize this routine for all 15 HP
+#from the plot HP4 seems to have a trend so let's play with that column
+iHP=4  #change this to chech other HP
+#prep_data <- data.frame("Inflow"=inflow_data[,iHP],"Time"=t)
+
 #Fit a linear trend to TS of iHP
-linear_trend <- lm(inflow_data[,iHP+1]~t)
-summary(linear_trend)
+linear_trend_model=lm(inflow_data[,iHP+1]~t)  
+summary(linear_trend_model)
+beta0=as.numeric(linear_trend_model$coefficients[1])  #first coefficient is the intercept term or beta0
+beta1=as.numeric(linear_trend_model$coefficients[2])  #second coefficient is the slope or beta1
+
+#Let's plot the time series with its trend line
+ggplot(inflow_data, aes(x=my_date, y=inflow_data[,(1+iHP)])) +
+            geom_line(color="blue") +
+            ylab(paste0("Inflow ",colnames(inflow_data)[(1+iHP)],sep="")) +
+            #geom_abline(intercept = beta0, slope = beta1, color="red")
+            geom_smooth(color="red",method="lm") 
 
 ```
 
 
 ```{r}
 #remove the trend from series
-beta0 <- linear_trend$coefficients[1] #no comma here because it's a vector
-beta1 <- linear_trend$coefficients[2]
+detrend_inflow_data <- inflow_data[,(iHP+1)]-(beta0+beta1*t)
 
-y_detrend <- inflow_data[, iHP+1] - (beta0 + beta1*t)
-#t is the independent variable. the two betas represent the trend.in the code, they're subtracting the formula from the code
-#if you subtract the epsilon from this, you'll just have a flat line so think of the y_detrend AS the epsilon ie everything not correlated with time.
+#Understanding what we did
+ggplot(inflow_data, aes(x=my_date, y=inflow_data[,(1+iHP)])) +
+            geom_line(color="blue") +
+            ylab(paste0("Inflow ",colnames(inflow_data)[(1+iHP)],sep="")) +
+            #geom_abline(intercept = beta0, slope = beta1, color="red")
+            geom_smooth(color="red",method="lm") +
+            geom_line(aes(y=detrend_inflow_data), col="green")+
+            geom_smooth(aes(y=detrend_inflow_data),color="orange",method="lm") 
 
-df_detrend <- data.frame("date"=inflow_data$my_date, 
-                         "observed"=inflow_data[,iHP+1], 
-                         "detrend"=y_detrend)
-
-ggplot(df_detrend, aes(x=date))+
-  geom_line(ae(y=observed), color = "black")+
-  geom_line(aes(y=detrend), color = "blue")
-
-#there's a lot of variability in the data still but it doesn't look random so that means we haven't been abel to detrend it fully
 ```
-
 Note that blue line is our original series, red line is our trend, green line is our original series minus the trend or in other words the detrended series. And in orange is the trend line for the detrended series which has slope 0 meaning we were able to effectively eliminate the trend with a linear model.
-
 
 ## Seasonal Component
 
 Now let's shift attention to the seasonal component.
 
 ```{r}
+#Let's choose another HP
+iHP=1 
+
 #Use seasonal means model
+#First create the seasonal dummies
+dummies <- seasonaldummy(ts_inflow_data[,iHP])  
+#this function only accepts ts object, no need to add one here because date 
+#object is not a column
 
-#%*% is element by element multiplication needed for matrix multiplication
+#Then fit a linear model to the seasonal dummies
+seas_means_model <- lm(inflow_data[,(iHP+1)]~dummies)
+summary(seas_means_model)
 
+#Look at the regression coefficient. These will be the values of Beta
+
+#Store regression coefficients
+beta_int <- seas_means_model$coefficients[1]
+beta_coeff <- seas_means_model$coefficients[2:12]
+
+#compute seasonal component
+inflow_seas_comp <- array(0,nobs)
+for(i in 1:nobs){
+  inflow_seas_comp[i] <- (beta_int+beta_coeff %*% dummies[i,])
+}
+
+#Understanding what we did
+ggplot(inflow_data, aes(x=my_date, y=inflow_data[,(1+iHP)])) +
+            geom_line(color="blue") +
+            ylab(paste0("Inflow ",colnames(inflow_data)[(1+iHP)],sep="")) +
+            geom_line(aes(y=inflow_seas_comp), col="red")
+
+
+#Removing seasonal component
+deseason_inflow_data <- inflow_data[,(1+iHP)]-inflow_seas_comp
+
+#Understanding what we did
+ggplot(inflow_data, aes(x=my_date, y=inflow_data[,(1+iHP)])) +
+            geom_line(color="blue") +
+            ylab(paste0("Inflow ",colnames(inflow_data)[(1+iHP)],sep="")) +
+            geom_line(aes(y=deseason_inflow_data), col="green")
 
 ```
 
-##Exercise
-
-Fit trend and seasonal for the other variables HP2, HP3, ...
-
-
 ## Stationarity Tests in R
 
-Some test only work for non-seasonal data. So let's create another series with yearly averages for inflow.
+Before we get started with the tests recall that for the year 2011 we only have data until Aug 2011. Let's filter our dataset to remove that last year. 
 
 ```{r}
-#Group data in yearly steps instances
+ts_inflow_data <- as.ts(ts_inflow_data[1:960,])
+my_date <- my_date[1:960]
 
+#create new df
+inflow_data_new <- cbind(my_date, ts_inflow_data)
+
+#note that there are more elegant ways to do that using filter function from package dplyr
+#Let me know if you would like to learn how to use them
+```
+
+Some test only work for non-seasonal data. SO let's create another series with yearly averages for inflow.
+
+```{r}
+iHP=1
+#Group data in yearly steps instances
+inflow_data_matrix <- matrix(ts_inflow_data[,iHP],byrow=FALSE,nrow=12)
+inflow_data_yearly <- colMeans(inflow_data_matrix)
+
+library(dplyr)  #move this to package chunk later
+my_year <- c(year(first(my_date)):year(last(my_date)))
+
+inflow_data_new_yearly <- data.frame(my_year, inflow_data_yearly)
+
+ggplot(inflow_data_new_yearly, aes(x=my_year, y=inflow_data_yearly)) +
+            geom_line(color="blue") +
+            geom_smooth(color="red",method="lm") 
 
 ```
 
@@ -213,9 +268,13 @@ Check for deterministic trend.
 
 #Since I have seasonal data I cannot use the simple MannKendall()
 #another example of functions that need a ts object
-
+SMKtest <- SeasonalMannKendall(ts_inflow_data[,iHP])
+print("Results for Seasonal Mann Kendall /n")
+print(summary(SMKtest))
 
 #Use yearly date to run Mann Kendall
+print("Results of Mann Kendall on average yearly series")
+print(summary(MannKendall(inflow_data_yearly)))
 
 ```
 
@@ -226,10 +285,12 @@ Also check for deterministic trend, for non-seasonal data only.
 ```{r}
 #Deterministic trend with Spearman Correlation Test
 print("Results from Spearman Correlation")
-
+sp_rho=cor(inflow_data_yearly,my_year,method="spearman")
+print(sp_rho)
 
 #with cor.test you can get test statistics
-
+sp_rho=cor.test(inflow_data_yearly,my_year,method="spearman")
+print(sp_rho)
 ```
 
 ### Augmented Dickey Fuller (ADF)
@@ -239,10 +300,11 @@ Used to detect stochastic trend.
 ```{r}
 #Null hypothesis is that data has a unit root
 print("Results for ADF test/n")
+print(adf.test(ts_inflow_data[,iHP],alternative = "stationary"))
 
 #Now let's try the yearly data
 print("Results for ADF test on yearly data/n")
-
+print(adf.test(inflow_data_yearly, alternative = "stationary"))
 ```
 
 ##Exercise

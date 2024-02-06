@@ -73,6 +73,7 @@ The data sets we will work with will be index by time, remember we are doing TIM
 
 ```{r}
 #using package lubridate
+library(lubridate)
 my_date <- paste(raw_inflow_data[,1],raw_inflow_data[,2],sep="-")
 my_date <- my(my_date)  #function my from package lubridate
 head(my_date)
@@ -95,7 +96,7 @@ A plot of observed values over time is the first you do to start understanding t
 plot(inflow_data[,"HP1"]) # note that this do not generate a nice plot
 
 plot(inflow_data[,"HP1"],type="l") #The type "l" tells you want a line plot check help(plot) 
-                                  #for other types of plots
+#for other types of plots
 
 plot(inflow_data[,"HP1"],type="l",col="blue") #Change the color of the series
 plot(inflow_data[,"HP1"],type="l",col="blue",ylab="Inflow [m3/s]") 
@@ -135,6 +136,7 @@ We could improve the plots generated in the previous sections using another pack
 
 ```{r}
 #using package ggplot2
+library(ggplot2)
 ggplot(inflow_data, aes(x=my_date, y=HP1)) +
             geom_line(color="blue")
 
@@ -156,7 +158,7 @@ Many of the functions we will use require a time series object. You can transfor
 ```{r}
 ts_inflow_data <- ts(inflow_data[,2:(2+nhydro-1)],start=c(1931,1),frequency=12) #note that we are only transforming columns with inflow data, not the date columns
 ts_inflow_data
-#plot(ts_inflow_data[,1])
+plot(ts_inflow_data[,1])
 ```
 
 Note that ts_inflow_data has information on start, end and frequency. We will discuss frequency in future lectures, for now let's just keep the default value for frequency which is 1.
@@ -167,12 +169,10 @@ Let's see the plots generated with *autoplot()*.
 autoplot(ts_inflow_data)
 
 #Improving plot
-
 autoplot(ts_inflow_data) +
   xlab("Time") +
   ylab("Inflow") +
   labs(color="Reservoir")
-  
 ```
 
 

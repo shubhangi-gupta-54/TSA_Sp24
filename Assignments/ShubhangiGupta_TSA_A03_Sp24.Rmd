@@ -1,0 +1,363 @@
+---
+title: "ENV 790.30 - Time Series Analysis for Energy Data | Spring 2024"
+subtitle: "Assignment 3 - Due date 05/01/24"
+author: "Shubhangi Gupta"
+output: pdf_document
+geometry: margin=2.54cm
+editor_options: 
+  chunk_output_type: console
+---
+
+## Directions
+  
+You should open the .rmd file corresponding to this assignment on RStudio. The file is available on our class repository on Github. 
+
+Once you have the file open on your local machine the first thing you will do is rename the file such that it includes your first and last name (e.g., "LuanaLima_TSA_A02_Sp24.Rmd"). Then change "Student Name" on line 4 with your name. 
+
+Then you will start working through the assignment by  **creating code and output** that answer each question. Be sure to use this assignment document. Your report should contain the answer to each question and any plots/tables you obtained (when applicable).
+
+Please keep this R code chunk options for the report. It is easier for us to grade when we can see code and output together. And the tidy.opts will make sure that line breaks on your code chunks are automatically added for better visualization. 
+
+```{r setup, include=FALSE} 
+knitr::opts_chunk$set(echo = TRUE,tidy.opts=list(width.cutoff=80), tidy=FALSE) 
+```
+
+When you have completed the assignment, **Knit** the text and code into a single PDF file. Submit this pdf using Sakai. 
+
+## Questions 
+
+Consider the same data you used for A2 from the spreadsheet "Table_10.1_Renewable_Energy_Production_and_Consumption_by_Source.xlsx". The data comes from the US Energy Information and Administration and corresponds to the December 2022 **Monthly** Energy Review. Once again you will work only with the following columns: Total Biomass Energy Production, Total Renewable Energy Production, Hydroelectric Power Consumption. Create a data frame structure with these three time series only. 
+
+R packages needed for this assignment:"forecast","tseries", and "Kendall". Install these packages, if you haven't done yet. Do not forget to load them before running your script, since they are NOT default packages.\\
+
+```{r}
+#Load/install required package here
+library(forecast)
+library(tseries)
+library(Kendall)
+library(stats)
+library(ggplot2)
+library(cowplot)
+library(lubridate)
+
+#Importing dataset
+Raw_REDataset <- read.csv("Data/Table_10.1_Renewable_Energy_Production_and_Consumption_by_Source.csv", 
+                  stringsAsFactors = TRUE)
+
+#Subsetting dataset to get the required columns
+REDataset <- Raw_REDataset[,c(1, 5:6)]
+head(REDataset)
+
+#Renaming column headings
+colnames(REDataset) <- c("Date", "RE", "Hydro")
+head(REDataset)
+
+#Converting the Date column to a Date object
+REDataset_Date <- REDataset$Date
+REDataset$Date <- ym(format(REDataset_Date, format = "%Y %B"))
+str(REDataset)
+
+#NOTE FOR GRADERS: I have not included biomass even though the question mentions
+#it based on Luana's message on slack to not include it.
+```
+
+##Trend Component
+
+### Q1
+For each time series, i.e., Renewable Energy Production and Hydroelectric Consumption create three plots: one with time series, one with the ACF and with the PACF. You may use the some code form A2, but I want all the three plots side by side as in a grid.
+(Hint: use function `plot_grid()` from the `cowplot` package)
+
+```{r}
+#Converting dataframe into time series
+
+ts_REDataset <- ts(REDataset[,2:3], start=c(1973, 01), frequency = 12)
+head(ts_REDataset)
+
+#RE Production Plots
+
+ts_RE_plot <- autoplot(ts_REDataset[,1],  col="orange") + 
+  xlab("Time") + ylab("RE Production") + 
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))+
+  ggtitle("RE Production over time")
+
+ts_RE_ACF <- Acf(ts_REDataset[, 1], lag.max = 60, type = "correlation", plot = FALSE) 
+ts_RE_ACF <- autoplot(ts_RE_ACF, col = "orange") + 
+  xlab ("Lag Time (Months)") + ylab ("ACF Value") + 
+  ggtitle("ACF of RE Production")
+
+ts_RE_PACF <- Pacf(ts_REDataset[, 1], lag.max = 60, type = "correlation", plot = FALSE)
+ts_RE_PACF <- autoplot(ts_RE_PACF, col = "orange") + xlab ("Lag Time (Months)")+ 
+  ylab ("PACF Value") + 
+  ggtitle("PACF of RE Production")
+
+plot_grid(ts_RE_plot, ts_RE_ACF, ts_RE_PACF )
+
+#Hydroelectric Power Consumption
+
+ts_Hydro_plot <- autoplot(ts_REDataset[,2],  col="blue") + 
+  xlab("Time") + ylab("Hydro Consumption") +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))+
+  ggtitle("Hydroelectric power consumption over time")
+
+ts_Hydro_ACF <- Acf(ts_REDataset[, 2], lag.max = 60, type = "correlation", plot = FALSE) 
+ts_Hydro_ACF <- autoplot(ts_Hydro_ACF, col = "blue") + 
+  xlab ("Lag Time (Months)") + ylab ("ACF Value") + 
+    ggtitle("ACF of Hydroelectric Power Consumption")
+
+ts_Hydro_PACF <- Pacf(ts_REDataset[, 2], lag.max = 60, type = "correlation", plot = FALSE)
+ts_Hydro_PACF <- autoplot(ts_Hydro_PACF, col = "blue") + 
+  xlab ("Lag Time (Months)") + ylab ("PACF Value") + 
+  ggtitle("PACF of Hydroelectric Power Consumption")
+
+plot_grid(ts_Hydro_plot, ts_Hydro_ACF, ts_Hydro_PACF )
+```
+
+
+### Q2
+From the plot in Q1, do the series Total Biomass Energy Production, Total Renewable Energy Production, Hydroelectric Power Consumption appear to have a trend? If yes, what kind of trend?
+
+RE Production has had an overall rising trend from 1973-2020 with steadily declining autocorrelation and almost insignificant PACF beyond the 12th lag mark (with the exception of mildly significant PACF values at the annual 12th, 24th and 36th lag marks). On the other hand, hydroelectric power consumption showcases a seasonal trend with autocorrelation and PACF decreasing over time but maintaining their 6-month positive and negative seasonal trend.
+
+### Q3
+Use the *lm()* function to fit a linear trend to the three time series. Ask R to print the summary of the regression. Interpret the regression output, i.e., slope and intercept. Save the regression coefficients for further analysis.
+
+```{r}
+nobs <- nrow(REDataset)
+t <- c(1:nobs)
+
+#Fitting the lm() function to the RE column
+lm_RE <- lm(ts_REDataset[,1]~t)
+print(summary(lm_RE))
+
+beta0_RE=as.numeric(lm_RE$coefficients[1]) 
+beta0_RE
+beta1_RE=as.numeric(lm_RE$coefficients[2])
+beta1_RE
+
+#Fitting the lm () function to the hydro column
+lm_hydro <- lm(ts_REDataset[,2]~t)
+print(summary(lm_hydro))
+
+beta0_Hydro=as.numeric(lm_hydro$coefficients[1]) 
+beta0_Hydro
+beta1_Hydro=as.numeric(lm_hydro$coefficients[2])
+beta1_Hydro
+
+```
+
+ *Interpretation of results*: 
+ RE regression:
+ Slope (B1) = 0.7 indicating a coherent upward rising trend 
+ Intercept (B0) = 180.98 
+ P-value = 2x10^-16 indicating strong statistical significance (p-value < 0.05)
+ Rsquared value of 80% signifying that  80% of the variability in the data is determined by time. 
+ 
+ Hydro regression:
+ Slope (B1) = -0.0098 indicating no significant upward or downward trend. This is verified by the plot where we can clearly see a seasonal cyclical trend in the data.
+ Intercept (B0) - 82.73
+ P-value = 2x10^-16 indicating strong statistical significance (p-value < 0.05)
+ R squared value = 1.3% indicating that the variability in the data is not really explained by time.
+ 
+### Q4
+Use the regression coefficients from Q3 to detrend the series. Plot the detrended series and compare with the plots from Q1. What happened? Did anything change?
+
+```{r}
+#Detrending the data
+detrend_RE_vector <- REDataset[,2]-(beta0_RE+beta1_RE*t)
+detrend_RE <- data.frame(detrend_RE_vector)
+colnames(detrend_RE)<-"detrended RE"
+head(detrend_RE)
+
+detrend_hydro_vector <- REDataset[,3]-(beta0_Hydro + beta1_Hydro*t)
+detrend_hydro <- data.frame(detrend_hydro_vector)
+colnames(detrend_hydro)<- "detrended hydro"
+head(detrend_hydro)
+
+#Plotting the original and detrended data for RE with their regression lines
+ggplot(REDataset, aes(x=Date, y=RE))+
+  geom_line(color="orange")+
+  geom_smooth(color="maroon", method="lm")+
+  geom_line(aes(y=detrend_RE$`detrended RE`), color = "yellow")+
+  geom_smooth(aes(y=detrend_RE$`detrended RE`), color = "red", method="lm")+
+  ylab("RE production")+
+  xlab("Time")
+
+#Plotting the original and detrended data for Hydro with their regression lines 
+ggplot(REDataset, aes(x=Date, y=Hydro))+
+  geom_line(color = "blue")+
+  geom_smooth(color="green", method="lm")+
+  geom_line(aes(y=detrend_hydro$`detrended hydro`), colour = "lightblue")+
+  geom_smooth(aes(y=detrend_hydro$`detrended hydro`), method="lm", color="darkgreen")+
+  xlab("Time")+
+  ylab("Hydro Consumption")
+```
+
+*Analysis*: The detrended data shifts the datapoints to around zero (because f the removal of the intercept). In the case of RE, the regression line went from being upward rising in the raw data to horizontal around zero in the detrended data. This indicates that the upward (linear) rising trend in the RE dataset was removed in the detrending process. On the other hand, in hydro, while the data shifted to around zero, the regression line of the raw data is almost parallel to that of the detrended data, and the shape of the time series remains perpetually the same, indicating that it was not detrended sufficiently (if at all).
+
+
+### Q5
+Plot ACF and PACF for the detrended series and compare with the plots from Q1. You may use plot_grid() again to get them side by side. nut mot mandatory. Did the plots change? How?
+
+```{r}
+#Converting detrended datasets into time series
+
+ts_detrend_RE <- ts(detrend_RE$`detrended RE`, start=c(1973, 01), frequency = 12)
+head(ts_detrend_RE)
+
+ts_detrend_hydro <- ts(detrend_hydro$`detrended hydro`, start=c(1973, 01), frequency = 12 )
+head(ts_detrend_hydro)
+
+#Detrended RE Production Plots
+
+ts_detrend_RE_plot <- autoplot(ts_detrend_RE,  col="orange") + 
+  xlab("Time") + ylab("RE Production") + 
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))+
+  ggtitle("Detrended RE Production over time")
+
+ts_detrend_RE_ACF <- Acf(ts_detrend_RE, lag.max = 60, type = "correlation", plot = FALSE) 
+ts_detrend_RE_ACF <- autoplot(ts_detrend_RE_ACF, col = "orange") + 
+  xlab("Lag Time (Months)") + ylab("ACF Value") + 
+  ggtitle("ACF of detrended RE Production")
+
+ts_detrend_RE_PACF <- Pacf(ts_detrend_RE, lag.max = 60, type = "correlation", plot = FALSE)
+ts_detrend_RE_PACF <- autoplot(ts_detrend_RE_PACF, col = "orange") + 
+  xlab ("Lag Time (Months)") + ylab ("PACF Value") + 
+  ggtitle("PACF of detrended RE Production")
+
+plot_grid(ts_detrend_RE_plot, ts_detrend_RE_ACF, ts_detrend_RE_PACF )
+
+#Detrended Hydroelectric Power Consumption
+
+ts_detrend_Hydro_plot <- autoplot(ts_detrend_hydro,  col="blue") + 
+  xlab("Time") + ylab("Hydro Consumption") +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))+
+  ggtitle("Detrended Hydroelectric power consumption over time")
+
+ts_detrend_Hydro_ACF <- Acf(ts_detrend_hydro, lag.max = 60, type = "correlation", plot = FALSE) 
+ts_detrend_Hydro_ACF <- autoplot(ts_detrend_Hydro_ACF, col = "blue") + 
+  xlab ("Lag Time (Months)") + ylab ("ACF Value") + 
+  ggtitle("ACF of detrended Hydroelectric Power Consumption")
+
+ts_detrend_Hydro_PACF <- Pacf(ts_detrend_hydro,  lag.max = 60, type = "correlation", plot = FALSE)
+ts_detrend_Hydro_PACF <- autoplot(ts_detrend_Hydro_PACF, col = "blue") + 
+  xlab ("Lag Time (Months)") + ylab ("PACF Value") + 
+  ggtitle("PACF of detrended Hydroelectric Power Consumption")
+
+plot_grid(ts_detrend_Hydro_plot, ts_detrend_Hydro_ACF, ts_detrend_Hydro_PACF )
+
+plot_grid(ts_RE_plot, ts_detrend_RE_plot)
+plot_grid(ts_RE_ACF, ts_detrend_RE_ACF)
+plot_grid(ts_RE_PACF, ts_detrend_RE_PACF)
+plot_grid(ts_Hydro_plot, ts_detrend_Hydro_plot)
+plot_grid(ts_Hydro_ACF, ts_detrend_Hydro_ACF)
+plot_grid(ts_Hydro_PACF, ts_detrend_Hydro_PACF)
+
+```
+
+*Analysis*: 
+In RE, the almost coherent upward trend changes significantly to cycle around zero although with a one large dip to below -100 in 2000-2015 and then a rise to above 100 from 2015-2020. The ACF also declines by about 0.25 in the initial lags but the shape of the curve remains similar, while PACF remains similar with only a slight decline  in the valye in lag 0.
+In hydro, the trend of the data remains similar, although it now hovers around 0 instead of the intercept of 82. The ACF and PACF both remain the same indicating no impact of the detrending on the data. 
+
+## Seasonal Component
+
+Set aside the detrended series and consider the original series again from Q1 to answer Q6 to Q8.
+
+### Q6
+Just by looking at the time series and the acf plots, do the series seem to have a seasonal trend? No need to run any code to answer your question. Just type in you answer below.
+
+The hydro consumption dataset has a clear seasonal trend, which is most evident from the ACF plot. However, RE production does not seem to have a seasonal trend, and instead seems to possibly have a linear trend.
+
+
+### Q7
+Use function *lm()* to fit a seasonal means model (i.e. using the seasonal dummies) the two time series. Ask R to print the summary of the regression. Interpret the regression output. From the results which series have a seasonal trend? Do the results match you answer to Q6?
+
+```{r}
+#Creating the seasonal dummies
+dummies_RE <- seasonaldummy(ts_REDataset[,1])  
+dummies_Hydro <- seasonaldummy(ts_REDataset[,2])
+
+#Fitting a linear model to the seasonal dummies
+seas_means_model_RE <- lm(REDataset[,2]~dummies_RE)
+summary(seas_means_model_RE)
+
+seas_means_model_Hydro <- lm(REDataset[,3]~dummies_Hydro)
+summary(seas_means_model_Hydro)
+
+#Storing regression coefficients
+B0_RE_seas <- seas_means_model_RE$coefficients[1]
+B0_RE_seas
+B1_RE_seas <- seas_means_model_RE$coefficients[2:12]
+B1_RE_seas
+
+B0_Hydro_seas <- seas_means_model_Hydro$coefficients[1]
+B0_Hydro_seas
+B1_Hydro_seas <- seas_means_model_Hydro$coefficients[2:12]
+B1_Hydro_seas
+```
+
+*Analysis*: The RE seasonal regression model does not give a significant output as the overall p-value is 0.8976 which is >0.05. Further the p-value of all beta values are also > 0.05, indicating that RE does not have a seasonal trend. On the other hand, the overall p=value of hydro seasonal regression model gives a significant output as the overall p-value is 2.2 x 10^-16 which is much < 0.05. Further, all beta values except for that of february are <0.05 indicating that hydro does have a seasonal trend. This matches my results from Qn 6.
+
+
+### Q8
+Use the regression coefficients from Q7 to deseason the series. Plot the deseason series and compare with the plots from part Q1. Did anything change?
+
+```{r}
+#computing seasonal component
+Hydro_seas_comp <- array(0,nobs)
+for(i in 1:nobs){
+  Hydro_seas_comp[i] <- (B0_Hydro_seas+B1_Hydro_seas %*% dummies_Hydro[i,])
+}
+head(Hydro_seas_comp)
+
+#Plotting the seasonal component
+ggplot(REDataset, aes(x=Date, y=Hydro)) +
+            geom_line(color="blue") +
+            ylab("Hydro Consumption")+
+            geom_line(aes(y=Hydro_seas_comp), color="red")
+
+#Removing seasonal component
+deseason_Hydro_data <- REDataset[,3]-Hydro_seas_comp
+head(deseason_Hydro_data)
+
+#Understanding what we did
+ggplot(REDataset, aes(x=Date, y=Hydro))+
+  geom_line(color="blue")+
+  ylab("Deaseasoned Hydro")+
+  geom_line(aes(y=deseason_Hydro_data, color="orange"))
+
+```
+
+*Analysis*: Deseasoning the Hydro dataset did reduce some of its seasonality and shifted it to around zero. However, an element of seasonality does still exist in the plot and it requires additional exploration of the ACF and PACF.
+
+### Q9
+Plot ACF and PACF for the deseason series and compare with the plots from Q1. You may use plot_grid() again to get them side by side. nut mot mandatory. Did the plots change? How?
+
+```{r}
+#Converting to a time series
+ts_deseason_hydro <- ts(deseason_Hydro_data, start=c(1973, 01), frequency = 12 )
+head(ts_detrend_hydro)
+
+#Creating plots of the deseasoned data and its ACF and PACF
+ts_deseason_Hydro_plot <- autoplot(ts_deseason_hydro,  col="blue") + 
+  xlab("Time") + ylab("Hydro Consumption") +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))+
+  ggtitle("Deseasoned Hydroelectric power consumption over time")
+
+ts_deseason_Hydro_ACF <- Acf(ts_deseason_hydro, lag.max = 60, type = "correlation", plot = FALSE) 
+ts_deseason_Hydro_ACF <- autoplot(ts_deseason_Hydro_ACF, col = "blue") + 
+  xlab ("Lag Time (Months)") + ylab ("ACF Value") + 
+  ggtitle("ACF of deseasoned Hydroelectric Power Consumption")
+
+ts_deseason_Hydro_PACF <- Pacf(ts_deseason_hydro,  lag.max = 60, type = "correlation", plot = FALSE)
+ts_deseason_Hydro_PACF <- autoplot(ts_deseason_Hydro_PACF, col = "blue") + 
+  xlab ("Lag Time (Months)") + ylab ("PACF Value") + 
+  ggtitle("PACF of deseasoned Hydroelectric Power Consumption")
+
+plot_grid(ts_deseason_Hydro_plot, ts_deseason_Hydro_ACF, ts_deseason_Hydro_PACF )
+plot_grid(ts_Hydro_plot, ts_deseason_Hydro_plot)
+plot_grid(ts_Hydro_ACF, ts_deseason_Hydro_ACF)
+plot_grid(ts_Hydro_PACF, ts_deseason_Hydro_PACF)
+
+```
+
+*Analysis*: The plots changed! This is most visible in the ACF graphs which went from being seasonal to linearly declining.
