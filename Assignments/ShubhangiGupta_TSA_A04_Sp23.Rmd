@@ -1,0 +1,217 @@
+---
+title: "ENV 790.30 - Time Series Analysis for Energy Data | Spring 2024"
+subtitle: "Assignment 4 - Due date 02/12/24"
+author: "Shubhangi Gupta"
+output: pdf_document
+geometry: margin=2.54cm
+editor_options: 
+  chunk_output_type: console
+---
+  
+## Directions
+  
+You should open the .rmd file corresponding to this assignment on RStudio. The file is available on our class repository on Github. And to do so you will need to fork our repository and link it to your RStudio.  
+
+Once you have the file open on your local machine the first thing you will do is rename the file such that it includes your first and last name (e.g., "LuanaLima_TSA_A04_Sp23.Rmd"). Then change "Student Name" on line 4 with your name. 
+
+Then you will start working through the assignment by  **creating code and output** that answer each question. Be sure to use this assignment document. Your report should contain the answer to each question and any plots/tables you obtained (when applicable).
+
+When you have completed the assignment, **Knit** the text and code into a single PDF file. Submit this pdf using Sakai. 
+
+R packages needed for this assignment: "xlsx" or "readxl", "ggplot2", "forecast","tseries", and "Kendall". Install these packages, if you haven't done yet. Do not forget to load them before running your script, since they are NOT default packages.\\
+
+```{r}
+#Load/install required package here
+library(readxl)
+library(ggplot2)
+library(forecast)
+library(tseries)
+library(Kendall)
+library(lubridate)
+library(tidyverse)
+library(cowplot)
+```
+
+## Questions 
+
+Consider the same data you used for A3 from the spreadsheet "Table_10.1_Renewable_Energy_Production_and_Consumption_by_Source.xlsx". The data comes from the US Energy Information and Administration and corresponds to the January 2021 Monthly Energy Review. For this assignment you will work only with the column "Total Renewable Energy Production". 
+
+```{r}
+getwd()
+
+#Importing data set - using readxl package
+REDataset_Raw <- read.csv("Data/Table_10.1_Renewable_Energy_Production_and_Consumption_by_Source.csv")
+
+#Subsetting the date and RE columns into a new object
+REDataset <- REDataset_Raw[,c(1, 5)]
+
+#Changing the column names
+colnames(REDataset)<-c("Date", "RE Production")
+
+#Converting the date column to a date object
+REDataset$Date <-ym(REDataset$Date)
+
+#Checking results
+glimpse(REDataset)
+```
+
+## Stochastic Trend and Stationarity Tests
+
+### Q1
+Difference the "Total Renewable Energy Production" series using function diff(). Function diff() is from package base and take three main arguments:
+* *x* vector containing values to be differenced;
+* *lag* integer indicating with lag to use;
+* *differences* integer indicating how many times series should be differenced.
+
+Try differencing at lag 1 only once, i.e., make `lag=1` and `differences=1`. Plot the differenced series Do the series still seem to have trend?
+
+```{r}
+#Differencing the RE dataset
+RE_diff <- diff(REDataset$`RE Production`, lag=1, differences=1)
+
+#Converting to a df to be able to plot it
+RE_diff_dates <- REDataset[c(2:609),1] #making a date column starting from Feb 1st 1973
+RE_diff_df <- as.data.frame(RE_diff) #converting numeric vector to a df
+RE_diff_df <- cbind(RE_diff_dates, RE_diff_df) #combining the date & differenced data columns
+glimpse(RE_diff_df)
+
+#Plotting the differenced dataset
+
+ggplot(RE_diff_df)+
+  geom_line(aes(y=RE_diff, x=RE_diff_dates), col="blue")+
+  xlab("Time")+
+  ylab("RE Production")
+
+#Converting the differenced dataset into a time series
+RE_diff_ts <- ts(RE_diff, frequency = 12, start = c(1973, 01))
+
+#Checking results
+glimpse(RE_diff_ts)
+```
+
+*Analysis*: the differenced series does not seem to have a trend anymore as the points hover around 0 (with some outliers) with no obvious trend.
+
+### Q2
+Copy and paste part of your code for A3 where you run the regression for Total Renewable Energy Production and subtract that from the orinal series. This should be the code for Q3 and Q4. make sure you use the same name for you time series object that you had in A3.
+
+```{r}
+#Converting the dataset into a time series
+RE_ts <- ts(REDataset[,2], frequency=12, start=c(1973,01))
+
+#Fitting a regression model on the total RE production dataset
+nobs <- nrow(REDataset)
+t <- c(1:nobs)
+RE_lm <- lm(RE_ts~t)
+print(summary(RE_lm))
+B0_RE <- as.numeric(RE_lm$coefficients[1])
+B0_RE
+B1_RE <- as.numeric(RE_lm$coefficients[2])
+B1_RE
+
+#Detrending the RE dataset using the regression results
+RE_detrended_vector <- REDataset[,2] - (B0_RE + B1_RE*t)
+RE_detrended <- as.data.frame(RE_detrended_vector)
+colnames(RE_detrended) <- "Detrended RE"
+head(RE_detrended)
+
+#converting the detrended dataset into a time series
+RE_detrended_ts <- ts(RE_detrended, frequency = 12, start=c(1973, 01))
+glimpse(RE_detrended_ts)
+```
+
+### Q3
+Now let's compare the differenced series with the detrended series you calculated on A3. In other words, for the "Total Renewable Energy Production" compare the differenced series from Q1 with the series you detrended in Q2 using linear regression. 
+
+Using autoplot() + autolayer() create a plot that shows the three series together. Make sure your plot has a legend. The easiest way to do it is by adding the `series=` argument to each autoplot and autolayer function. Look at the key for A03 for an example. 
+
+```{r}
+autoplot(RE_ts, series = "Original")+
+  autolayer(RE_detrended_ts, series = "Detrended")+
+  autolayer(RE_diff_ts, series = "Differenced")+
+  ylab("RE Production")+
+  xlab("Time")+
+  ggtitle("Total RE Production")
+```
+
+### Q4
+Plot the ACF for the three series and compare the plots. Add the argument `ylim=c(-0.5,1)` to the autoplot() or Acf() function - whichever you are using to generate the plots - to make sure all three y axis have the same limits. Which method do you think was more efficient in eliminating the trend? The linear regression or differencing?
+
+```{r}
+RE_original_ACF <- Acf(RE_ts, lag.max=40, type="correlation", plot=FALSE)
+RE_diff_ACF <- Acf(RE_diff_ts, lag.max=40, type="correlation", plot=FALSE, ylim=c(-0.5,1))
+RE_detrended_ACF <- Acf(RE_detrended_ts, lag.max=40, type="correlation", plot=FALSE, ylim=c(-0.5,1))
+
+RE_original_ACF_plot<- autoplot(RE_original_ACF,col = "blue")+
+  xlab ("Lag Time (Months)") + ylab ("ACF Value") + 
+  ggtitle("ACF of Original RE Trend")+
+  coord_cartesian(ylim=c(-0.5,1))
+
+RE_diff_ACF_plot<- autoplot(RE_diff_ACF,col = "green")+
+  xlab ("Lag Time (Months)") + ylab ("ACF Value") + 
+  ggtitle("ACF of Differenced RE Trend")+
+  coord_cartesian(ylim=c(-0.5,1))
+
+RE_detrended_ACF_plot<- autoplot(RE_detrended_ACF, col = "orange")+
+  xlab ("Lag Time (Months)") + ylab ("ACF Value") + 
+  ggtitle("ACF of Detrended RE data")+
+  coord_cartesian(ylim=c(-0.5,1))
+
+plot_grid(RE_original_ACF_plot, RE_diff_ACF_plot, RE_detrended_ACF_plot)
+  
+```
+*Analysis*: the differencing was a lot more effective than the regression in detrending the data.
+
+### Q5
+Compute the Seasonal Mann-Kendall and ADF Test for the original "Total Renewable Energy Production" series. Ask R to print the results. Interpret the results for both test. What is the conclusion from the Seasonal Mann Kendall test? What's the conclusion for the ADF test? Do they match what you observed in Q2? Recall that having a unit root means the series has a stochastic trend. And when a series has stochastic trend we need to use a different procedure to remove the trend.
+
+```{r}
+#ADF Test: Tests for stochasticity
+print(adf.test(REDataset$`RE Production`), alternative="stationary")
+
+#Seasonal Mann-Kendall Test
+print(summary(SeasonalMannKendall(RE_ts)))
+```
+*Analysis*: The ADF test failed as the p-value = 0.9 <= 0.05 significance level. This indicates that the null hypothesis that there is a unit root is true meaning that the original RE dataset could be stochastic. To test if the data is stationary or follows a trend, we use the Seasonal Mann-Kendall test. In this case, the p-value of the SMK test is 2.22 x 10^-16 which is < 0.05 and thus we reject the null hypothesis that the data is stationary and the alternative hypothesis that the data may follow a trend may be true.
+
+### Q6
+Aggregate the original "Total Renewable Energy Production" series by year. You can use the same procedure we used in class. Store series in a matrix where rows represent months and columns represent years. And then take the columns mean using function colMeans(). Recall the goal is the remove the seasonal variation from the series to check for trend. Convert the accumulates yearly series into a time series object and plot the series using autoplot().
+
+```{r}
+#Removing 9 datapoints from 2023 that were preventing it from having 12 datapoints in the last column
+RE_matrix_df <- REDataset[-c(601:609),]
+tail(RE_matrix_df)
+
+#Making a matrix with the rows as months and years as columns
+RE_matrix <- matrix(RE_matrix_df$`RE Production`, byrow=FALSE, nrow=12)
+glimpse(RE_matrix)
+
+#Renaming the rows and columns
+rownames(RE_matrix) <- c("January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December")
+colnames(RE_matrix)<-c(1973:2022)
+head(RE_matrix,12)
+
+#Calculating the yearly averages
+RE_yearly <- colMeans(RE_matrix)
+head(RE_yearly)
+
+#Converting the yearly means into a time series and plotting
+RE_yearly_ts <- ts(RE_yearly, frequency = 12, start = c(1973, 01))
+scatter.smooth(RE_yearly_ts, xlab = "Years", ylab = "Average Annual RE Production", main = " Average Annual RE data", col="orange")
+```
+
+### Q7
+Apply the Mann Kendal, Spearman correlation rank test and ADF. Are the results from the test in agreement with the test results for the monthly series, i.e., results for Q6?
+
+```{r}
+#ADF Test
+print(adf.test(RE_yearly), alternative="stationary")
+
+#Mann Kendall Test
+print(summary(MannKendall(RE_yearly_ts)))
+
+#Spearman correlation rank test
+RE_year <- c(1973:2022)
+cor(RE_yearly, RE_year, method="spearman")
+```
+
+*Analysis*: The ADF test on the annual average data fails as well as the p-value > 0.05. On the other hand the Mann Kendall test is successful as the p-value < 0.05, and so there is deterministic trend in the data. This is confirmed by the Spearman correlation test that finds a very high 0.91 correlation between the annual average RE production values and time (years).
