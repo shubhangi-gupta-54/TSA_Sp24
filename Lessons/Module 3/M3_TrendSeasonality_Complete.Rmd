@@ -256,7 +256,7 @@ inflow_data_new_yearly <- data.frame(my_year, inflow_data_yearly)
 
 ggplot(inflow_data_new_yearly, aes(x=my_year, y=inflow_data_yearly)) +
             geom_line(color="blue") +
-            geom_smooth(color="red",method="lm") 
+            geom_smooth(color="red",method="lm")
 
 ```
 
@@ -275,6 +275,7 @@ print(summary(SMKtest))
 #Use yearly date to run Mann Kendall
 print("Results of Mann Kendall on average yearly series")
 print(summary(MannKendall(inflow_data_yearly)))
+
 
 ```
 
