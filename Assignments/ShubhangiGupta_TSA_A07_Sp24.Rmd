@@ -1,0 +1,299 @@
+---
+title: "ENV 797 - Time Series Analysis for Energy and Environment Applications | Spring 2024"
+subtitle: "Assignment 7 - Due date 03/07/24"
+author: "Shubhangi Gupta"
+output: pdf_document
+geometry: margin=2.54cm
+---
+
+## Directions
+
+You should open the .rmd file corresponding to this assignment on RStudio. The file is available on our class repository on Github. And to do so you will need to fork our repository and link it to your RStudio.  
+
+Once you have the file open on your local machine the first thing you will do is rename the file such that it includes your first and last name (e.g., "LuanaLima_TSA_A07_Sp24.Rmd"). Then change "Student Name" on line 4 with your name. 
+
+Then you will start working through the assignment by  **creating code and output** that answer each question. Be sure to use this assignment document. Your report should contain the answer to each question and any plots/tables you obtained (when applicable).
+
+When you have completed the assignment, **Knit** the text and code into a single PDF file. Submit this pdf using Sakai. 
+
+Packages needed for this assignment: "forecast","tseries". Do not forget to load them before running your script, since they are NOT default packages.\\
+
+## Set up
+
+```{r}
+#Load/install required package here
+library(lubridate)
+library(ggplot2)
+library(forecast)  
+library(Kendall)
+library(tseries)
+library(outliers)
+library(tidyverse)
+#install.packages("smooth")
+library(smooth)
+library(cowplot)
+library(sarima)
+```
+
+## Importing and processing the data set
+
+Consider the data from the file "Net_generation_United_States_all_sectors_monthly.csv". The data corresponds to the monthly net generation from January 2001 to December 2020 by source and is provided by the US Energy Information and Administration. **You will work with the natural gas column only**.
+
+
+### Q1
+
+Import the csv file and create a time series object for natural gas. Make you sure you specify the **start=** and **frequency=** arguments. Plot the time series over time, ACF and PACF.
+
+```{r}
+#Importing data
+USElecGen_Raw <- read.csv(file="Data/Net_generation_United_States_all_sectors_monthly.csv", 
+                          skip=4, header=TRUE, stringsAsFactors = TRUE)
+#Checking imported data
+head(USElecGen_Raw)
+#Subsetting natural gas
+USElecGen_NG <- USElecGen_Raw[,c(1,4)]
+#Renaming columns
+colnames(USElecGen_NG) <- c("Date", "NG_Gen_MWh")
+#Converting the date column into a date object
+USElecGen_NG$Date <- my(USElecGen_NG$Date)
+#Checking subsetted & renamed data
+glimpse(USElecGen_NG)
+#The data is in reverse temporal order so rearranging it.
+USElecGen_NG <- USElecGen_NG %>% arrange(Date)
+#Checking arranged data
+head(USElecGen_NG)
+#Converting to time series
+USElecGen_NG_ts <- ts(USElecGen_NG$`NG_Gen_MWh`, start=c(2001,01), frequency=12)
+#Checking the ts
+USElecGen_NG_ts
+#Plotting the time series, ACF and PACF
+USElecGen_NG_ts_plot <- autoplot(USElecGen_NG_ts, col='orange')+ylab('US NG Elec Gen (MWh)')
+USElecGen_NG_ts_ACF <- autoplot(Acf(USElecGen_NG_ts, lag.max = 40, type = "correlation", 
+                                    plot = FALSE), col="blue")
+USElecGen_NG_ts_PACF <- autoplot(Pacf(USElecGen_NG_ts, lag.max = 40, type = "correlation", 
+                                      plot = FALSE), col="darkgreen")
+plot_grid(USElecGen_NG_ts_plot, USElecGen_NG_ts_ACF, USElecGen_NG_ts_PACF)
+```
+
+### Q2
+
+Using the $decompose()$ or $stl()$ and the $seasadj()$ functions create a series without the seasonal component, i.e., a deseasonalized natural gas series. Plot the deseasonalized series over time and corresponding ACF and PACF. Compare with the plots obtained in Q1. 
+
+```{r}
+#decomposing the data using decompose()
+USElecGen_NG_ts_decompose <- decompose(USElecGen_NG_ts, "additive")
+autoplot(USElecGen_NG_ts_decompose)
+
+#deseseasoning the data
+USElecGen_NG_deseasoned <- seasadj(USElecGen_NG_ts_decompose)
+USElecGen_NG_deseasoned
+USElecGen_NG_deseasoned_plot <- autoplot(USElecGen_NG_deseasoned, col="orange")
+USElecGen_NG_deseasoned_Acf <- autoplot(Acf(USElecGen_NG_deseasoned, lag.max=40, 
+                                            type = "correlation", plot=FALSE), col="blue")
+USElecGen_NG_deseasoned_Pacf <- autoplot(Pacf(USElecGen_NG_deseasoned, lag.max=40, 
+                                              type = "correlation", plot=FALSE), col="darkgreen")
+plot_grid(USElecGen_NG_deseasoned_plot, USElecGen_NG_deseasoned_Acf, USElecGen_NG_deseasoned_Pacf)
+```
+**Analysis**: The series plot (orange) clearly shows that the seasonal component has been removed. This is corroborated by the ACF as the original plot shows a seasonal component whereas the deseasoned ACF is declining over time, with no seasonality. The PACF is also more clean, as fluctuations at later lags are gone and all but the first lag are now insignificant. The plot now only showcases a rising trend over time.
+
+## Modeling the seasonally adjusted or deseasonalized series
+
+### Q3
+
+Run the ADF test and Mann Kendall test on the deseasonalized data from Q2. Report and explain the results.
+
+```{r}
+#ADF test to check for stochasticity
+print(adf.test(USElecGen_NG_deseasoned), alternative="stationary")
+
+#Mann Kedndall test to check for a deterministic trend.
+print(summary(MannKendall(USElecGen_NG_deseasoned)))
+```
+**Analysis**: The ADF test gave a p-value < 0.05 meaning we reject the null hypothesis and don't reject the alternative hypothesis ie the the data is possibly stationary and thus not stochastic. The Mann Kendall test also gives a significant result since the p-value < 0.05 so we reject the null hypothesis and don't reject the alternative, indicating that the data has a deterministic trend.
+
+### Q4
+
+Using the plots from Q2 and test results from Q3 identify the ARIMA model parameters $p,d$ and $q$. Note that in this case because you removed the seasonal component prior to identifying the model you don't need to worry about seasonal component. Clearly state your criteria and any additional function in R you might use. DO NOT use the $auto.arima()$ function. You will be evaluated on ability to understand the ACF/PACF plots and interpret the test results.
+
+```{r}
+ndiffs(USElecGen_NG_deseasoned)
+```
+
+
+**Analysis**: The answer from qn 3 indicates that the series is not stationary, and so it will have to be differenced to achieved stationarity. Thus d=1. This is corroborated by the ndiffs() result.
+Next, the ACF from Qn 2 shows a declining trend over time and PACF is only significant at lag 1, indicating the need for an AR component. Since there is only 1 significant PACF spike, the order of the AR model would be 1. Thus p=1.
+Since PACF is not decaying over time, I assume that there is no MA component. So q=0.
+Thus, I would estimate the model of best fit to be ARIMA(1,1,0)
+
+### Q5
+
+Use `Arima()` from package "forecast" to fit an ARIMA model to your series considering the order estimated in Q4. You should allow constants in the model, i.e., `include.mean = TRUE` or `include.drift=TRUE`. **Print the coefficients** in your report. Hint: use the `cat()` r `print()` function to print.
+
+```{r}
+#Starting with my assumption of the model ARIMA (1,1,0)
+USElecGen_NG_deseasoned_ARIMA110 <- Arima(USElecGen_NG_deseasoned, order=c(1,1,0), 
+                                          include.mean=TRUE, include.drift = TRUE)
+print(summary(USElecGen_NG_deseasoned_ARIMA110))
+plot_grid(autoplot(USElecGen_NG_deseasoned_ARIMA110$residuals, col="orange"),
+  autoplot(Acf(USElecGen_NG_deseasoned_ARIMA110$residuals,lag.max=40, plot = FALSE), col="blue"),
+  autoplot(Pacf(USElecGen_NG_deseasoned_ARIMA110$residuals,lag.max=40, plot = FALSE), col="darkgreen"),
+  nrow=1)
+
+#Adding an MA component
+USElecGen_NG_deseasoned_ARIMA111 <- Arima(USElecGen_NG_deseasoned, order=c(1,1,1), 
+                                          include.mean=TRUE, include.drift = TRUE)
+print(summary(USElecGen_NG_deseasoned_ARIMA111))
+plot_grid(autoplot(USElecGen_NG_deseasoned_ARIMA111$residuals, col="orange"),
+  autoplot(Acf(USElecGen_NG_deseasoned_ARIMA111$residuals,lag.max=40, plot = FALSE), col="blue"),
+  autoplot(Pacf(USElecGen_NG_deseasoned_ARIMA111$residuals,lag.max=40, plot = FALSE), col="darkgreen"),
+  nrow=1)
+
+#Adding a second AR component since there is still some autocorrelation
+USElecGen_NG_deseasoned_ARIMA211 <- Arima(USElecGen_NG_deseasoned, order=c(2,1,1), 
+                                          include.mean=TRUE, include.drift = TRUE)
+print(summary(USElecGen_NG_deseasoned_ARIMA211))
+plot_grid(autoplot(USElecGen_NG_deseasoned_ARIMA211$residuals, col="orange"),
+  autoplot(Acf(USElecGen_NG_deseasoned_ARIMA211$residuals,lag.max=40, plot = FALSE), col="blue"),
+  autoplot(Pacf(USElecGen_NG_deseasoned_ARIMA211$residuals,lag.max=40, plot = FALSE), col="darkgreen"),
+  nrow=1)
+
+#The second AR component increased the AIC so removing that and adding a second MA component
+USElecGen_NG_deseasoned_ARIMA112 <- Arima(USElecGen_NG_deseasoned, order=c(1,1,2), 
+                                          include.mean=TRUE, include.drift = TRUE)
+print(summary(USElecGen_NG_deseasoned_ARIMA112))
+plot_grid(autoplot(USElecGen_NG_deseasoned_ARIMA112$residuals, col="orange"),
+  autoplot(Acf(USElecGen_NG_deseasoned_ARIMA112$residuals,lag.max=40, plot = FALSE), col="blue"),
+  autoplot(Pacf(USElecGen_NG_deseasoned_ARIMA112$residuals,lag.max=40, plot = FALSE), col="darkgreen"),
+  nrow=1)
+
+#Checking how this would fair without differencing
+USElecGen_NG_deseasoned_ARIMA101 <- Arima(USElecGen_NG_deseasoned, order=c(1,0,1), 
+                                          include.mean=TRUE, include.drift = TRUE)
+print(summary(USElecGen_NG_deseasoned_ARIMA101))
+plot_grid(autoplot(USElecGen_NG_deseasoned_ARIMA101$residuals, col="orange"),
+  autoplot(Acf(USElecGen_NG_deseasoned_ARIMA101$residuals,lag.max=40, plot = FALSE), col="blue"),
+  autoplot(Pacf(USElecGen_NG_deseasoned_ARIMA101$residuals,lag.max=40, plot = FALSE), col="darkgreen"),
+  nrow=1)
+
+Comparing_AICs <- data.frame(USElecGen_NG_deseasoned_ARIMA110$aic, 
+                             USElecGen_NG_deseasoned_ARIMA111$aic, 
+                             USElecGen_NG_deseasoned_ARIMA211$aic, 
+                             USElecGen_NG_deseasoned_ARIMA112$aic, 
+                             USElecGen_NG_deseasoned_ARIMA101$aic)
+Comparing_AICs
+```
+**Analysis**: The best model fit is ARIMA (1,1,1) as it has the lowest AIC. I began by testing ARIMA (1,1,0) as the original deseseasoned data had a declining ACF over time indicating that an AR component would be a good fit. However the result did have some significant spikes in the ACF in initial years, indicating the possible need for an MA component. Thus I added that and tested ARIMA (1,1,1) next which did take out those significant ACF spikes leaving only one at lag 12 which can be ignored. I also tested ARIMA (2,1,1) and ARIMA (1,1,2) to see if an additional AR or MA component would make it more robust, but the AIC increased and there was no significant change in the ACF and PACF plots so those components are not required. I also tested the model without differencing ARIMA(1,0,1) which give the highest AIC of all, indicating that differencing is required as the series is not stationary. Thus the correct model fit is ARIMA (1,1,1).
+
+### Q6
+
+Now plot the residuals of the ARIMA fit from Q5 along with residuals ACF and PACF on the same window. You may use the $checkresiduals()$ function to automatically generate the three plots. Do the residual series look like a white noise series? Why?
+
+```{r}
+#Plotting the best fitted model ARIMA(1,1,1)
+checkresiduals(USElecGen_NG_deseasoned_ARIMA111)
+
+```
+**Analysis**: Yes, the residuals almost look like white noise, apart from a couple of points that could be outliers.This is supported by the fact that the residuals are  fitted by a normal distribution indicating that they are iid.
+
+## Modeling the original series (with seasonality)
+
+### Q7
+
+Repeat Q4-Q6 for the original series (the complete series that has the seasonal component). Note that when you model the seasonal series, you need to specify the seasonal part of the ARIMA model as well, i.e., $P$, $D$ and $Q$.
+
+```{r}
+#Checking if seasonal differencing is required using nsdiffs()
+nsdiffs(USElecGen_NG_ts)
+
+#Checking ACF and PACF of original data
+plot_grid(
+  autoplot(USElecGen_NG_ts, col="orange"),
+  autoplot(Acf(USElecGen_NG_ts, lag.max=40, plot=FALSE), col="blue"),
+  autoplot(Pacf(USElecGen_NG_ts, lag.max=40, plot=FALSE), col="darkgreen"))
+
+#The ACF and PACF show a seasonal trend at lag 12, so differencing that
+USElecGen_NG_ts_differenced <- diff(USElecGen_NG_ts, lag=12, differences = 1)
+plot_grid(autoplot(USElecGen_NG_ts_differenced, col="orange"), 
+          autoplot(Acf(USElecGen_NG_ts_differenced, lag.max=40, plot=FALSE),col="blue"),
+          autoplot(Pacf(USElecGen_NG_ts_differenced, lag.max=40, plot=FALSE), col="darkgreen"))
+
+#To fit the SARIMA model, considering p=1, d=1, q=1 since that was the best fit result 
+#in the previous questions. For the seasonal component, since P+Q <=1, starting with Q=1, 
+#since the autocorrelation at the seasonal period is negative
+USElecGen_NG_SARIMA111001 <- Arima(USElecGen_NG_ts, order=c(1,1,1), seasonal=c(0,0,1), include.drift=TRUE)
+print(summary(USElecGen_NG_SARIMA111001))
+
+plot_grid(autoplot(USElecGen_NG_SARIMA111001$residuals, col="orange"), autoplot(Acf(USElecGen_NG_SARIMA111001$residuals, lag.max=40, plot=FALSE),col="blue"), autoplot(Pacf(USElecGen_NG_SARIMA111001$residuals, lag.max=40, plot=FALSE), col="darkgreen"))
+
+#The ACF still shows seasonal spikes so adding a D=1 component to difference that
+
+USElecGen_NG_SARIMA111011 <- Arima(USElecGen_NG_ts, order=c(1,1,1), seasonal=c(0,1,1), 
+                                   include.drift=TRUE)
+print(summary(USElecGen_NG_SARIMA111011))
+
+plot_grid(autoplot(USElecGen_NG_SARIMA111011$residuals, col="orange"), 
+          autoplot(Acf(USElecGen_NG_SARIMA111011$residuals, lag.max=40, plot=FALSE),col="blue"),
+          autoplot(Pacf(USElecGen_NG_SARIMA111011$residuals, lag.max=40, plot=FALSE), col="darkgreen"))
+
+#The ACF is now insignificant!
+
+Comparing_AICs_Seasonal <- data.frame(USElecGen_NG_SARIMA111001$aic, USElecGen_NG_SARIMA111011$aic)
+Comparing_AICs_Seasonal
+
+#The correct answer is SARIMA(1,1,1)(0,1,1).
+```
+**Analysis**: Differencing the original data at lag 12 indicated an ACF with many significant negative spikes, indicating the need for an SMA. Thus I ran a SARIMA(1,1,1)(0,0,1) which led to an ACF plot that still had some seasonal lags. Thus I tried adding a differencing component D=1 and ran SARIMA(1,1,1)(0,1,1) which differenced out that seasonality and yielded a lower AIC. Thus the answer is SARIMA(1,1,1)(0,1,1)
+
+### Q8
+
+Compare the residual series for Q7 and Q6. Can you tell which ARIMA model is better representing the Natural Gas Series? Is that a fair comparison? Explain your response.
+
+```{r}
+#Checking the residuals of SARIMA(1,1,1)(0,0,1)
+checkresiduals(USElecGen_NG_SARIMA111001)
+
+#Checking the residuals of SARIMA(1,1,1)(0,1,1)
+checkresiduals(USElecGen_NG_SARIMA111011)
+```
+**Analysis**: Model SARIMA(1,1,1)(0,0,1) has multiple significant ACF spikes in its residuals, and their plot has more deviations away from 0, when many points exceeding the +/- 1000 mark. On the other hand, SARIMA(1,1,1)(0,1,1) loses the signficant ACF spikes and the residuals are a lot more centred aroudn 0 with most points within the +/- 1000 threshold. Both these factors help us determine which model is doing a better job of fitting the data.
+
+## Checking your model with the auto.arima()
+
+**Please** do not change your answers for Q4 and Q7 after you ran the $auto.arima()$. It is **ok** if you didn't get all orders correctly. You will not loose points for not having the same order as the $auto.arima()$.
+
+### Q9
+
+Use the $auto.arima()$ command on the **deseasonalized series** to let R choose the model parameter for you. What's the order of the best ARIMA model? Does it match what you specified in Q4?
+
+```{r}
+print(auto.arima(USElecGen_NG_deseasoned))
+#This answer matches!
+```
+
+
+### Q10
+
+Use the $auto.arima()$ command on the **original series** to let R choose the model parameters for you. Does it match what you specified in Q7?
+
+```{r}
+print(auto.arima(USElecGen_NG_ts))
+```
+**Analysis**: the seasonal parameters match my answer P=0, D=1, Q=1 but the mistake I made was that I retained the order of p,d,q based on the answers of qn 4 - which in retrospect is wrong because those orders are based on deseseasoned data, which this time it is not. Running the correct orders below to see the correct result.
+```{r}
+#Running SARIMA(1,0,0)(0,1,1)
+
+USElecGen_NG_SARIMA100011 <- Arima(USElecGen_NG_ts, order=c(1,0,0), seasonal=c(0,1,1), 
+                                   include.drift=TRUE)
+print(summary(USElecGen_NG_SARIMA100011))
+
+plot_grid(autoplot(USElecGen_NG_SARIMA100011$residuals, col="orange"), 
+          autoplot(Acf(USElecGen_NG_SARIMA100011$residuals, lag.max=40, plot=FALSE),col="blue"),
+          autoplot(Pacf(USElecGen_NG_SARIMA100011$residuals, lag.max=40, plot=FALSE), col="darkgreen"))
+
+print(USElecGen_NG_SARIMA100011$aic)
+#interesting to see that the AIC of this model is higher than that of SARIMA(1,1,1)(0,1,1) 
+#which was 4552
+
+checkresiduals(USElecGen_NG_SARIMA100011)
+```
+

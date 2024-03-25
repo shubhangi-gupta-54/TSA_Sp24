@@ -35,7 +35,6 @@ library(cowplot)
 For this module we will work with monthly average for electricity retail price in US. The data is from the U.S. Energy Information Administration and can be download [here][https://www.eia.gov/electricity/data/browser/#/topic/7?agg=2,0,1&geo=g&freq=M%2013:41:41%20GMT-0500%20(EST)]. 
 
 ```{r}
-
 #Importing time series data from text file#
 electricity_price <- read.csv(file="./Data/Average_retail_price_of_electricity_United_States_monthly.csv",header=TRUE,skip=4)
 
